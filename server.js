@@ -185,27 +185,17 @@ app.delete('/api/bans/:userId', async (req, res) => {
 });
 
 app.put('/api/users/:id', async (req, res) => {
-    const { newId, nickname, password } = req.body;
+    const { nickname, password } = req.body;
     const currentId = req.params.id;
     try {
-        if (newId !== currentId) {
-            const check = await db.query('SELECT id FROM users WHERE id = $1', [newId]);
-            if (check.rows.length > 0) return res.json({ success: false, message: '이미 존재하는 아이디입니다.' });
-            
-            await db.query('BEGIN');
-            await db.query('UPDATE users SET id = $1, nickname = $2' + (password ? ', password = $3' : '') + ' WHERE id = $4', 
-                password ? [newId, nickname, password, currentId] : [newId, nickname, currentId]);
-            // cascade takes care of foreign keys if set up correctly, but let's be safe if needed
-            // Actually our schema has ON DELETE CASCADE but for ID updates we might need manual handling if not ON UPDATE CASCADE
-            await db.query('COMMIT');
+        if (password) {
+            await db.query('UPDATE users SET nickname = $1, password = $2 WHERE id = $3', [nickname, password, currentId]);
         } else {
-            await db.query('UPDATE users SET nickname = $1' + (password ? ', password = $2' : '') + ' WHERE id = $3', 
-                password ? [nickname, password, currentId] : [nickname, currentId]);
+            await db.query('UPDATE users SET nickname = $1 WHERE id = $2', [nickname, currentId]);
         }
-        const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [newId]);
+        const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [currentId]);
         res.json({ success: true, user: rows[0] });
     } catch (err) { 
-        await db.query('ROLLBACK');
         res.status(500).json({ error: err.message }); 
     }
 });

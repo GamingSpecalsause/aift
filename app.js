@@ -258,23 +258,18 @@ function getAllLoggedInUsers() {
     });
 }
 
-async function updateUserInfo(newId, newNickname, newPassword) {
+async function updateUserInfo(currentId, newNickname, newPassword) {
     const session = getSession();
-    const currentId = session.activeId;
     if (!currentId) return { success: false };
 
     const res = await fetch(`${API_BASE}/users/${currentId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newId, nickname: newNickname, password: newPassword })
+        body: JSON.stringify({ nickname: newNickname, password: newPassword })
     });
     const data = await res.json();
     if (data.success) {
-        session.accounts = session.accounts.map(acc => acc === currentId ? newId : acc);
-        session.activeId = newId;
-        saveSession(session);
-        localStorage.setItem(`user_${newId}`, JSON.stringify(data.user));
-        if (newId !== currentId) localStorage.removeItem(`user_${currentId}`);
+        localStorage.setItem(`user_${currentId}`, JSON.stringify(data.user));
     }
     return data;
 }
