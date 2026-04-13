@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>글 보기</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .edited-tag { font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-left: 8px; }
+        .reply-item { margin-left: 40px; border-left: 2px solid var(--border); background: #fafafa; }
+        .reply-badge { color: var(--primary); font-size: 0.7rem; margin-right: 5px; }
+        .reply-form { margin: 10px 0 10px 40px; padding: 10px; background: #f8fafc; border-radius: 8px; border: 1px dashed var(--border); }
+        .pinned-comment { background-color: #fffbeb !important; border: 1px solid #fde68a !important; }
+        .btn-ban-small { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; padding: 1px 6px; border-radius: 4px; font-size: 0.65rem; cursor: pointer; margin-left: 8px; vertical-align: middle; }
+        .btn-ban-small:hover { background: #fecaca; }
+        .post-suspended-view { background-color: #f1f5f9 !important; border: 2px solid #cbd5e1 !important; border-radius: 12px; }
+        .suspended-notice { background: #64748b; color: white; padding: 10px; border-radius: 8px; margin-bottom: 1rem; text-align: center; font-weight: bold; }
+        .post-author-badge { background: #eff6ff; color: #1d4ed8; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; margin-left: 5px; border: 1px solid #bfdbfe; vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="index.html" class="btn btn-outline">← 목록으로</a>
+            <div id="actions-zone"></div>
+        </header>
+
+        <div id="suspended-msg"></div>
+
+        <article id="post-content">
+            <h1 style="margin-bottom:0.5rem;">
+                <span id="view-title"></span>
+                <span id="view-edited" class="edited-tag" style="display:none;">(수정됨)</span>
+            </h1>
+            <div class="post-meta" style="margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+                <span id="view-author"></span>
+                <span id="view-date"></span>
+                <span id="view-views"></span>
+                <span id="view-comments" class="comment-count-meta"></span>
+            </div>
+            <div id="view-body" class="content-body"></div>
+        </article>
+
+        <section class="comment-section">
+            <h3>댓글 <span id="comment-count">0</span></h3>
+            <div id="comment-write-zone"></div>
+            <div id="comment-list" class="comment-list"></div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const postId = urlParams.get('id');
+        let post = null;
+        const user = getCurrentUser();
+
+        (async function init() {
+            post = await getPost(postId, true);
+
+            if (!post) { alert('게시글 오류'); location.href = 'index.html'; }
+            else {
+                const authorBan = await getBanStatus(post.userId);
+                const isBannedAuthor = authorBan.banned;
+
+                // 일반 사용자: 글이 정지되었거나 작성자가 정지된 경우 접근 차단
+                if ((post.suspended || isBannedAuthor) && (!user || !isAdmin(user.id))) {
+                    alert(isBannedAuthor ? '정지된 사용자의 게시글입니다.' : '정지된 게시글입니다.');
+                    location.href = 'index.html';
+                } else {
+                    await renderPost(isBannedAuthor);
+                    await renderComments();
+                }
+            }
+        })();
+
+        async function renderPost(isBannedAuthor) {
+            if (post.suspended || isBannedAuthor) {
+                document.getElementById('post-content').classList.add('post-suspended-view');
+                let noticeHtml = `<div class="suspended-notice">`;
+                if (isBannedAuthor) {
+                    noticeHtml += `🚫 이 게시글의 작성자는 현재 정지 상태입니다. (관리자 전용) 
+                                   <button onclick="handleQuickUnban('${post.userId}')" style="margin-left:10px; padding:2px 8px; cursor:pointer; background:#fff; color:#b91c1c; border:1px solid #b91c1c; border-radius:4px; font-size:0.75rem;">정지 해제</button>`;
+                } else {
+                    noticeHtml += `🚫 이 게시글은 관리자에 의해 정지되었습니다. (관리자 전용)`;
+                }
+                noticeHtml += `</div>`;
+                document.getElementById('suspended-msg').innerHTML = noticeHtml;
+            }
+
+            const authorNick = await getNickname(post.userId);
+            const isAuthorAdmin = isAdmin(post.userId);
+            const nickHtml = `<span class="${isAuthorAdmin ? 'nickname-admin' : ''}">${authorNick}</span>`;
+            let idHtml = '';
+            if (user && isAdmin(user.id) && !isAuthorAdmin) {
+                idHtml = `<span class="id-view-red">(@${post.userId})</span>`;
+            }
+
+            document.getElementById('view-title').textContent = (post.pinned ? '📌 ' : '') + post.title;
+            
+            let banBtn = '';
+            if (user && isAdmin(user.id) && !isAuthorAdmin) {
+                banBtn = `<button onclick="handleQuickBan('${post.userId}')" class="btn-ban-small">정지</button>`;
+            }
+            document.getElementById('view-author').innerHTML = '👤 ' + nickHtml + idHtml + banBtn;
+            document.getElementById('view-date').textContent = '📅 ' + post.date;
+            document.getElementById('view-views').textContent = '👁️ ' + post.views;
+            document.getElementById('view-comments').textContent = '💬 ' + await getCommentCount(post.id);
+            document.getElementById('view-body').textContent = post.content;
+            if (post.edited) document.getElementById('view-edited').style.display = 'inline';
+
+            let html = '';
+            if (user && user.id === post.userId) html += `<a href="edit.html?id=${post.id}" class="btn btn-outline" style="margin-right:5px;">수정</a>`;
+            if (user && (user.id === post.userId || isAdmin(user.id))) html += `<button onclick="handleDeletePost()" class="btn btn-danger">삭제</button> `;
+            if (user && isAdmin(user.id) && user.id === post.userId) html += `<button onclick="handlePin()" class="btn btn-outline" style="border-color:#e11d48; color:#e11d48; margin-left:5px;">${post.pinned ? '고정 해제' : '상단 고정'}</button>`;
+            document.getElementById('actions-zone').innerHTML = html;
+
+            const writeZone = document.getElementById('comment-write-zone');
+            if (user) {
+                writeZone.innerHTML = `
+                    <div class="comment-form">
+                        <textarea id="new-comment-text" placeholder="댓글을 입력하세요... (Shift+Enter로 즉시 등록)" 
+                            onkeydown="if(event.shiftKey && event.key === 'Enter') { event.preventDefault(); handleAddComment(); }"></textarea>
+                        <button onclick="handleAddComment()" class="btn btn-primary" style="width:100%; margin-top:10px;">댓글 등록 (Shift+Enter)</button>
+                    </div>
+                `;
+            }
+        }
+
+        async function renderComments() {
+            const allPostComments = await getComments(postId);
+            document.getElementById('comment-count').textContent = allPostComments.length;
+            const list = document.getElementById('comment-list');
+            const parents = allPostComments.filter(c => !c.parentId);
+            const replies = allPostComments.filter(c => c.parentId);
+
+            if (parents.length === 0) {
+                list.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:2rem;">댓글이 없습니다.</p>';
+                return;
+            }
+
+            let html = '';
+            for (const p of parents) {
+                html += await renderCommentItem(p, false);
+                const childComments = replies.filter(r => r.parentId === p.id);
+                for (const c of childComments) {
+                    html += await renderCommentItem(c, true);
+                }
+            }
+            list.innerHTML = html;
+        }
+
+        async function renderCommentItem(c, isReply) {
+            const nick = await getNickname(c.userId);
+            const isAuthorAdmin = isAdmin(c.userId);
+            const nickHtml = `<span class="${isAuthorAdmin ? 'nickname-admin' : ''}">${nick}</span>`;
+            let idHtml = '';
+            if (user && isAdmin(user.id) && !isAuthorAdmin) {
+                idHtml = `<span class="id-view-red">(@${c.userId})</span>`;
+            }
+
+            const canEdit = user && user.id === c.userId;
+            const canDelete = canEdit || (user && isAdmin(user.id));
+            // 댓글 고정 권한: 관리자 또는 게시글 작성자
+            const canPin = user && (isAdmin(user.id) || user.id === post.userId) && !isReply;
+            
+            let commentBanBtn = '';
+            if (user && isAdmin(user.id) && !isAdmin(c.userId)) {
+                commentBanBtn = `<button onclick="handleQuickBan('${c.userId}')" class="btn-ban-small" style="margin-left:5px;">정지</button>`;
+            }
+
+            const editedMark = c.edited ? ' <small style="color:#94a3b8">(수정됨)</small>' : '';
+            const pinMark = c.pinned ? '<span style="color:#e11d48; margin-right:5px;" title="고정된 댓글">📌</span>' : '';
+            const postAuthorMark = c.userId === post.userId ? '<span class="post-author-badge">글 작성자</span>' : '';
+
+            return `
+                <div class="comment-item ${isReply ? 'reply-item' : ''} ${c.pinned ? 'pinned-comment' : ''}" id="comment-${c.id}">
+                    <div class="comment-meta">
+                        <div>${pinMark}${isReply ? '<span class="reply-badge">ㄴ 답글:</span>' : ''}<strong>${nickHtml}</strong>${idHtml}${postAuthorMark}${commentBanBtn}${editedMark}</div>
+                        <div style="color:var(--text-muted); font-size:0.75rem;">${c.date}</div>
+                    </div>
+                    <div class="comment-content" id="content-${c.id}">${c.content}</div>
+                    <div class="comment-actions">
+                        ${(user && !isReply) ? `<button onclick="showReplyForm('${c.id}')">답글</button>` : ''}
+                        ${canPin ? `<button onclick="handleToggleCommentPin('${c.id}')" style="color:#e11d48;">${c.pinned ? '고정 해제' : '고정'}</button>` : ''}
+                        ${canEdit ? `<button onclick="showEditForm('${c.id}')">수정</button>` : ''}
+                        ${canDelete ? `<button onclick="handleDeleteComment('${c.id}')" class="del-btn">삭제</button>` : ''}
+                    </div>
+                    <div id="reply-zone-${c.id}"></div>
+                </div>
+            `;
+        }
+
+        window.handleToggleCommentPin = async function(commentId) {
+            if (await toggleCommentPin(commentId)) await renderComments();
+        };
+
+        window.handleQuickBan = async function(userId) {
+            const daysInput = prompt('정지 기간을 입력하세요 (숫자만: 1, 3, 7, 30 / 영구정지는 -1)', '3');
+            if (daysInput === null) return;
+            const days = parseInt(daysInput);
+            if (isNaN(days)) { alert('숫자만 입력 가능합니다.'); return; }
+            
+            const reason = prompt('정지 사유를 입력하세요', '부적절한 게시글/댓글 작성');
+            if (!reason) return;
+
+            if (await banUser(userId, days, reason)) {
+                alert(`@${userId} 사용자가 정지되었습니다.`);
+                location.reload();
+            }
+        };
+
+        window.handleAddComment = async function() {
+            const text = document.getElementById('new-comment-text').value.trim();
+            if (!text) return;
+            await createComment(postId, user.id, text);
+            document.getElementById('new-comment-text').value = '';
+            await renderComments();
+        };
+
+        window.showReplyForm = function(id) {
+            const zone = document.getElementById(`reply-zone-${id}`);
+            if (zone.innerHTML) { zone.innerHTML = ''; return; }
+            zone.innerHTML = `
+                <div class="reply-form">
+                    <textarea id="reply-text-${id}" placeholder="답글 입력... (Shift+Enter로 등록)" style="width:100%; height:60px;"
+                        onkeydown="if(event.shiftKey && event.key === 'Enter') { event.preventDefault(); handleAddReply('${id}'); }"></textarea>
+                    <div style="margin-top:5px; text-align:right;">
+                        <button class="btn btn-primary" style="padding:4px 12px; font-size:0.8rem;" onclick="handleAddReply('${id}')">답글 등록</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById(`reply-text-${id}`).focus();
+        };
+
+        window.handleAddReply = async function(parentId) {
+            const text = document.getElementById(`reply-text-${parentId}`).value.trim();
+            if (!text) return;
+            await createComment(postId, user.id, text, parentId);
+            await renderComments();
+        };
+
+        window.showEditForm = function(id) {
+            const contentDiv = document.getElementById(`content-${id}`);
+            const currentText = contentDiv.textContent;
+            contentDiv.innerHTML = `
+                <textarea class="comment-edit-area" id="edit-input-${id}" 
+                    onkeydown="if(event.shiftKey && event.key === 'Enter') { event.preventDefault(); saveCommentEdit('${id}'); }">${currentText}</textarea>
+                <div style="display:flex; gap:5px;">
+                    <button class="btn btn-primary" style="padding:4px 10px; font-size:0.75rem;" onclick="saveCommentEdit('${id}')">완료</button>
+                    <button class="btn btn-outline" style="padding:4px 10px; font-size:0.75rem;" onclick="renderComments()">취소</button>
+                </div>
+            `;
+            document.getElementById(`edit-input-${id}`).focus();
+        };
+
+        window.saveCommentEdit = async function(id) {
+            const newText = document.getElementById(`edit-input-${id}`).value.trim();
+            if (!newText) return;
+            if (await updateComment(id, newText)) await renderComments();
+        };
+
+        window.handleDeleteComment = async function(id) {
+            if (confirm('삭제하시겠습니까? (대댓글 포함)')) { await deleteComment(id); await renderComments(); }
+        };
+
+        window.handleDeletePost = async function() {
+            if (confirm('게시글을 삭제하시겠습니까?')) { await deletePost(postId); location.href = 'index.html'; }
+        };
+        window.handlePin = async function() { if (await togglePin(postId)) location.reload(); };
+        window.handleQuickUnban = async function(userId) {
+            if (confirm(`@${userId} 사용자의 정지를 해제하시겠습니까?`)) {
+                await unbanUser(userId);
+                alert('정지가 해제되었습니다.');
+                location.reload();
+            }
+        };
+    </script>
+</body>
+</html>

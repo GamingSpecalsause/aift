@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>회원 정보 수정</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container" style="max-width: 500px;">
+        <header>
+            <h1>👤 프로필 설정</h1>
+            <a href="index.html" class="btn btn-outline">홈으로</a>
+        </header>
+
+        <div class="auth-box" style="margin-top: 0; width: 100%; max-width: 100%;">
+            <form id="profile-form">
+                <div class="form-group">
+                    <label>로그인 아이디 (외부 노출 안됨)</label>
+                    <input type="text" id="userid" required>
+                </div>
+                <div class="form-group">
+                    <label>표시할 닉네임 (게시글 노출)</label>
+                    <input type="text" id="nickname" required>
+                </div>
+                <div class="form-group">
+                    <label>새 비밀번호 변경</label>
+                    <input type="password" id="password" style="width:100%; padding:0.75rem; border:1px solid var(--border); border-radius:0.5rem;" placeholder="변경 시 숫자+특수문자 필수">
+                </div>
+                <hr style="border:0; border-top:1px solid var(--border); margin:2rem 0;">
+                <button type="submit" class="btn btn-primary" style="width:100%; padding:1rem;">정보 수정 완료</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        (async () => {
+            const user = getCurrentUser();
+            if (!user) {
+                alert('로그인이 필요합니다.');
+                location.href = 'login.html';
+                return;
+            }
+
+            document.getElementById('userid').value = user.id;
+            document.getElementById('nickname').value = user.nickname;
+
+            document.getElementById('profile-form').onsubmit = async (e) => {
+                e.preventDefault();
+                const newId = document.getElementById('userid').value;
+                const newNick = document.getElementById('nickname').value;
+                const newPw = document.getElementById('password').value;
+
+                const result = await updateUserInfo(newId, newNick, newPw);
+                if (result.success) {
+                    alert('회원 정보가 성공적으로 수정되었습니다.');
+                    location.href = 'index.html';
+                } else {
+                    alert(result.message);
+                }
+            };
+        })();
+    </script>
+</body>
+</html>

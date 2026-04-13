@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>관리자 - 정지 관리</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .ban-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .ban-table th, .ban-table td { padding: 12px; border: 1px solid var(--border); text-align: left; }
+        .ban-table th { background: #f8fafc; cursor: pointer; }
+        .ban-table th:hover { background: #f1f5f9; }
+        .ban-form { background: #fff; padding: 20px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 30px; }
+        .badge-perm { background: #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
+        .badge-temp { background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="index.html" class="btn btn-outline">← 메인으로</a>
+            <h1>🛡️ 사용자 정지 관리</h1>
+        </header>
+
+        <section class=\"ban-form\">
+            <h3>사용자 정지하기</h3>
+            <div style=\"display:grid; grid-template-columns: 1fr 1fr 2fr 1fr; gap: 10px; margin-top:10px;\">
+                <input type=\"text\" id=\"ban-user-id\" placeholder=\"사용자 ID (@제외)\">
+                <select id=\"ban-duration\">
+                    <option value=\"1\">1일 정지</option>
+                    <option value=\"3\">3일 정지</option>
+                    <option value=\"7\">7일 정지</option>
+                    <option value=\"30\">30일 정지</option>
+                    <option value=\"-1\">영구 정지</option>
+                </select>
+                <input type=\"text\" id=\"ban-reason\" placeholder=\"정지 사유\">
+                <button onclick=\"handleBan()\" class=\"btn btn-danger\">정지 적용</button>
+            </div>
+        </section>
+
+        <section>
+            <div style=\"display:flex; justify-content: space-between; align-items: center; margin-bottom: 10px;\">
+                <h3>정지된 사용자 목록</h3>
+                <div style=\"display:flex; gap:10px;\">
+                    <input type=\"text\" id=\"ban-search\" placeholder=\"ID 또는 닉네임 검색\" oninput=\"renderBannedList()\" style=\"padding:4px 8px; border-radius:4px; border:1px solid var(--border); font-size:0.8rem;\">
+                    <button onclick=\"renderBannedList('recent')\" class=\"btn btn-outline\" style=\"font-size:0.8rem;\">최근 정지순</button>
+                    <button onclick=\"renderBannedList('duration')\" class=\"btn btn-outline\" style=\"font-size:0.8rem;\">남은 기간순</button>
+                </div>
+            </div>
+            <table class=\"ban-table\">
+                <thead>
+                    <tr>
+                        <th>대상(ID)</th>
+                        <th>닉네임</th>
+                        <th>정지 사유</th>
+                        <th>정지 만료일</th>
+                        <th>정지 일시</th>
+                        <th>관리</th>
+                    </tr>
+                </thead>
+                <tbody id=\"ban-list-body\"></tbody>
+            </table>
+        </section>
+    </div>
+
+    <script src=\"app.js\"></script>
+    <script>
+        (async () => {
+            const user = getCurrentUser();
+            if (!user || !isAdmin(user.id)) {
+                alert('관리자만 접근 가능합니다.');
+                location.href = 'index.html';
+                return;
+            }
+
+            window.handleBan = async function() {
+                const userId = document.getElementById('ban-user-id').value.trim();
+                const days = parseInt(document.getElementById('ban-duration').value);
+                const reason = document.getElementById('ban-reason').value.trim();
+
+                if (!userId || !reason) {
+                    alert('ID와 사유를 입력해주세요.');
+                    return;
+                }
+                if (isAdmin(userId)) {
+                    alert('관리자는 정지할 수 없습니다.');
+                    return;
+                }
+
+                if (await banUser(userId, days, reason)) {
+                    alert(`${userId} 계정이 정지되었습니다.`);
+                    document.getElementById('ban-user-id').value = '';
+                    document.getElementById('ban-reason').value = '';
+                    await renderBannedList();
+                }
+            };
+
+            window.handleUnban = async function(userId) {
+                if (confirm('정지를 해제하시겠습니까?')) {
+                    await unbanUser(userId);
+                    await renderBannedList();
+                }
+            };
+
+            let currentSort = 'recent';
+            window.renderBannedList = async function(sortBy = currentSort) {
+                currentSort = sortBy;
+                let list = await getBannedList();
+                const tbody = document.getElementById('ban-list-body');
+                const searchQuery = document.getElementById('ban-search').value.toLowerCase();
+
+                if (searchQuery) {
+                    list = list.filter(b => 
+                        b.userId.toLowerCase().includes(searchQuery) || 
+                        b.nickname.toLowerCase().includes(searchQuery)
+                    );
+                }
+
+                if (sortBy === 'recent') {
+                    list.sort((a, b) => new Date(b.bannedAt) - new Date(a.bannedAt));
+                } else if (sortBy === 'duration') {
+                    list.sort((a, b) => {
+                        if (a.until === 'PERMANENT') return 1;
+                        if (b.until === 'PERMANENT') return -1;
+                        return new Date(a.until) - new Date(b.until);
+                    });
+                }
+
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan=\"6\" style=\"text-align:center; color:var(--text-muted);\">정지된 사용자가 없습니다.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = list.map(b => `
+                    <tr>
+                        <td>@${b.userId}</td>
+                        <td>${b.nickname}</td>
+                        <td>${b.reason}</td>
+                        <td>
+                            <span class=\"${b.until === 'PERMANENT' ? 'badge-perm' : 'badge-temp'}\">
+                                ${b.status.until}
+                            </span>
+                        </td>
+                        <td style=\"font-size:0.8rem; color:var(--text-muted);\">${new Date(b.bannedAt).toLocaleString()}</td>
+                        <td>
+                            <button onclick=\"handleUnban('${b.userId}')\" class=\"btn btn-outline\" style=\"padding:4px 8px; font-size:0.75rem;\">해제</button>
+                        </td>
+                    </tr>
+                `).join('');
+            };
+
+            await renderBannedList();
+        })();
+    </script>
+</body>
+</html>

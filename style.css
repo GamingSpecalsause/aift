@@ -1,0 +1,174 @@
+:root {
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --bg: #f8fafc;
+    --card-bg: #ffffff;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --border: #e2e8f0;
+    --danger: #ef4444;
+}
+
+body {
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    background-color: var(--bg);
+    color: var(--text-main);
+    margin: 0;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+h1 { font-size: 1.875rem; font-weight: 700; margin: 0; }
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-size: 0.875rem;
+}
+
+.btn-primary { background-color: var(--primary); color: white; }
+.btn-primary:hover { background-color: var(--primary-hover); }
+
+.btn-danger { background-color: #fee2e2; color: var(--danger); }
+.btn-danger:hover { background-color: #fecaca; }
+
+.btn-outline { border: 1px solid var(--border); background: white; color: var(--text-muted); }
+.btn-outline:hover { background: #f1f5f9; }
+
+/* Post List */
+.post-card {
+    background: var(--card-bg);
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    margin-bottom: 1rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+}
+
+.post-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.post-title { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.5rem 0; color: var(--text-main); }
+.post-meta { font-size: 0.875rem; color: var(--text-muted); display: flex; gap: 1rem; }
+
+/* Editor & View */
+.form-group { margin-bottom: 1.5rem; }
+label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+input[type="text"], textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+textarea { height: 300px; resize: vertical; }
+
+.content-body {
+    background: white;
+    padding: 2rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    min-height: 200px;
+    white-space: pre-wrap;
+    margin-bottom: 3rem;
+}
+
+/* Comment Styles */
+.comment-section {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 2px solid var(--border);
+}
+
+.comment-form {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    margin-bottom: 2rem;
+}
+
+.comment-list { list-style: none; padding: 0; }
+
+.comment-item {
+    padding: 1.25rem;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+}
+
+.comment-meta {
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.comment-content { font-size: 0.95rem; color: var(--text-main); white-space: pre-wrap; }
+
+.comment-actions { display: flex; gap: 10px; font-size: 0.75rem; margin-top: 0.5rem; }
+.comment-actions button, .comment-actions a {
+    background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0;
+}
+.comment-actions button:hover { color: var(--primary); text-decoration: underline; }
+.comment-actions .del-btn:hover { color: var(--danger); }
+
+.comment-edit-area {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--primary);
+    border-radius: 0.4rem;
+    margin: 0.5rem 0;
+}
+
+
+/* Auth Styles */
+.auth-box {
+    max-width: 400px;
+    margin: 5rem auto;
+    background: white;
+    padding: 2.5rem;
+    border-radius: 1rem;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.auth-header { text-align: center; margin-bottom: 2rem; }
+.auth-footer { text-align: center; margin-top: 1.5rem; font-size: 0.875rem; color: var(--text-muted); }
+.auth-link { color: var(--primary); text-decoration: none; font-weight: 600; }
+
+.user-info { display: flex; align-items: center; gap: 1rem; font-size: 0.875rem; }
+.username { font-weight: 600; color: var(--text-main); }
+
+/* User Styles */
+.nickname-admin { color: #2563eb; font-weight: bold; } /* 관리자 닉네임 파란색 */
+.id-view-red { color: #ef4444; font-size: 0.75rem; margin-left: 4px; font-weight: normal; } /* 관리자용 타인 ID 조회 */
+
+.comment-count-meta { margin-left: 10px; color: var(--primary); font-weight: 600; }
+
+

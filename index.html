@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>커뮤니티 메인</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .pin-badge { background: #fff1f2; color: #e11d48; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-right: 8px; border: 1px solid #fda4af; }
+        .post-card.pinned { border-left: 4px solid #e11d48; background: #fffcfc; }
+        .post-card.suspended { background: #f1f5f9; border-color: #cbd5e1; opacity: 0.8; }
+        .suspended-badge { background: #64748b; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; margin-right: 8px; }
+        .edited-tag { font-size: 0.7rem; color: #94a3b8; margin-left: 5px; font-weight: normal; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div id="auth-zone" class="user-info"></div>
+        </header>
+        <div id="post-list"></div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        (async function init() {
+            const user = getCurrentUser();
+            const loggedInUsers = getAllLoggedInUsers();
+            const authZone = document.getElementById('auth-zone');
+
+            if (user) {
+                let accountsHtml = '';
+                if (loggedInUsers.length > 1) {
+                    accountsHtml = `
+                        <select onchange="handleSwitchUser(this.value)" style="margin-right:10px; padding:4px; border-radius:4px; border:1px solid var(--border); font-size:0.8rem;">
+                            ${loggedInUsers.map(u => `<option value="${u.id}" ${u.id === user.id ? 'selected' : ''}>${u.nickname}</option>`).join('')}
+                        </select>
+                    `;
+                }
+
+                authZone.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        ${accountsHtml}
+                        <span style="font-size:0.8rem; color:var(--text-muted)">${isAdmin(user.id) ? '🛡️ 관리자' : '✨ 회원'}</span>
+                        <a href="profile.html" class="username ${isAdmin(user.id) ? 'nickname-admin' : ''}"> ${user.nickname}님</a>
+                        ${isAdmin(user.id) ? `<a href="admin.html" class="btn btn-outline" style="border-color:#e11d48; color:#e11d48; font-size:0.75rem; padding:4px 8px;">정지 관리</a>` : ''}
+                        <a href="editor.html" class="btn btn-primary">글쓰기</a>
+                        <a href="login.html" class="btn btn-outline" style="font-size:0.75rem; padding:4px 8px;">+ 계정 추가</a>
+                        <button onclick="logoutUser()" class="btn btn-danger" style="font-size:0.75rem; padding:4px 8px;">로그아웃</button>
+                    </div>
+                `;
+            } else {
+                authZone.innerHTML = `<a href="login.html" class="btn btn-outline">로그인</a> <a href="signup.html" class="btn btn-primary">회원가입</a>`;
+            }
+
+            window.handleSwitchUser = async function(id) {
+                if (await switchUser(id)) location.reload();
+            };
+
+            async function renderList() {
+                const listContainer = document.getElementById('post-list');
+                let posts = await getPosts();
+                
+                // 계정 정지된 사용자의 글 필터링
+                const filteredPosts = [];
+                for (const p of posts) {
+                    const authorBan = await getBanStatus(p.userId);
+                    const isBannedAuthor = authorBan.banned;
+                    
+                    if (!user || !isAdmin(user.id)) {
+                        // 일반인: 작성자가 정지된 경우 숨김
+                        if (!isBannedAuthor) filteredPosts.push(p);
+                    } else {
+                        // 관리자: 모든 글을 보되 정지 유저 상태 임시 저장
+                        p._isBannedAuthor = isBannedAuthor;
+                        filteredPosts.push(p);
+                    }
+                }
+                posts = filteredPosts;
+
+                if (posts.length === 0) {
+                    listContainer.innerHTML = '<p style="text-align:center; color:#64748b; margin-top:3rem;">작성된 게시물이 없습니다.</p>';
+                    return;
+                }
+
+                const postItems = await Promise.all(posts.map(async post => {
+                    const authorNickname = await getNickname(post.userId);
+                    const isAuthorAdmin = isAdmin(post.userId);
+                    
+                    const nickHtml = `<span class="${isAuthorAdmin ? 'nickname-admin' : ''}">${authorNickname}</span>`;
+                    
+                    let idDisplay = '';
+                    if (user && isAdmin(user.id) && !isAuthorAdmin) {
+                        idDisplay = `<span class="id-view-red">(@${post.userId})</span>`;
+                    }
+
+                    const pinBadge = post.pinned ? `<span class="pin-badge">📌 고정됨</span>` : '';
+                    const bannedBadge = post._isBannedAuthor ? `<span class="suspended-badge" style="background:#ef4444;">👤 정지 유저</span>` : '';
+                    const editedMark = post.edited ? `<span class="edited-tag">(수정됨)</span>` : '';
+                    const commentCount = await getCommentCount(post.id);
+                    const commentDisplay = commentCount > 0 ? `<span class="comment-count-meta">💬 ${commentCount}</span>` : '';
+
+                    return `
+                        <a href="post.html?id=${post.id}" class="post-card ${post.pinned ? 'pinned' : ''} ${post._isBannedAuthor ? 'suspended' : ''}">
+                            <h2 class="post-title">${pinBadge}${bannedBadge}${post.title}${editedMark}</h2>
+                            <div class="post-meta">
+                                <span>👤 ${nickHtml}${idDisplay}</span>
+                                <span>📅 ${post.date}</span>
+                                <span>👁️ ${post.views}</span>
+                                ${commentDisplay}
+                            </div>
+                        </a>
+                    `;
+                }));
+                listContainer.innerHTML = postItems.join('');
+            }
+            await renderList();
+        })();
+    </script>
+</body>
+</html>
